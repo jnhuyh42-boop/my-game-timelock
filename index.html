@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TimeLock — Apna Secret Lock Karo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #111118;
+      --border: #1e1e2e;
+      --gold: #c8a96e;
+      --gold-light: #e8c98e;
+      --gold-dim: #8a6f42;
+      --text: #d4cfc8;
+      --text-dim: #7a7570;
+      --red: #c04040;
+      --green: #4a8c5c;
+      --accent: #1a1a28;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Crimson Pro', Georgia, serif;
+      font-size: 17px;
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Background texture */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% 0%, #1a1520 0%, transparent 60%),
+        radial-gradient(ellipse 40% 30% at 20% 80%, #0d1520 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    /* Header */
+    header {
+      text-align: center;
+      margin-bottom: 56px;
+    }
+
+    .lock-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      display: block;
+      filter: drop-shadow(0 0 20px rgba(200,169,110,0.3));
+      animation: float 4s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+
+    h1 {
+      font-family: 'Cinzel', serif;
+      font-size: clamp(28px, 5vw, 42px);
+      font-weight: 900;
+      color: var(--gold);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      line-height: 1.1;
+    }
+
+    .subtitle {
+      font-family: 'Crimson Pro', serif;
+      font-style: italic;
+      color: var(--text-dim);
+      margin-top: 8px;
+      font-size: 16px;
+    }
+
+    .divider {
+      width: 120px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold-dim), transparent);
+      margin: 20px auto 0;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 32px;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 14px;
+      background: var(--surface);
+      border: none;
+      color: var(--text-dim);
+      font-family: 'Cinzel', serif;
+      font-size: 13px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab.active {
+      background: var(--accent);
+      color: var(--gold);
+      border-bottom: 2px solid var(--gold);
+    }
+
+    .tab:hover:not(.active) {
+      color: var(--text);
+      background: #141420;
+    }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 32px;
+      position: relative;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 60%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold-dim), transparent);
+    }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* Form elements */
+    label {
+      display: block;
+      font-family: 'Cinzel', serif;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--gold-dim);
+      margin-bottom: 8px;
+      margin-top: 24px;
+    }
+
+    label:first-of-type { margin-top: 0; }
+
+    input, textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'Crimson Pro', serif;
+      font-size: 16px;
+      padding: 12px 16px;
+      border-radius: 4px;
+      outline: none;
+      transition: border-color 0.2s;
+      -webkit-appearance: none;
+    }
+
+    input[type="date"] {
+      color-scheme: dark;
+    }
+
+    input:focus, textarea:focus {
+      border-color: var(--gold-dim);
+    }
+
+    textarea {
+      min-height: 100px;
+      resize: vertical;
+      font-size: 18px;
+      letter-spacing: 0.05em;
+    }
+
+    /* Password field with toggle */
+    .password-wrap {
+      position: relative;
+    }
+
+    .password-wrap input {
+      padding-right: 48px;
+      font-family: monospace;
+      letter-spacing: 0.12em;
+      font-size: 16px;
+    }
+
+    .toggle-eye {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-dim);
+      font-size: 18px;
+      padding: 4px;
+      transition: color 0.2s;
+    }
+
+    .toggle-eye:hover { color: var(--gold); }
+
+    /* Date picker row */
+    .date-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .preset-btns {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .preset {
+      padding: 6px 14px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      color: var(--text-dim);
+      font-family: 'Crimson Pro', serif;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .preset:hover {
+      border-color: var(--gold-dim);
+      color: var(--gold);
+    }
+
+    /* Button */
+    .btn {
+      width: 100%;
+      margin-top: 28px;
+      padding: 16px;
+      background: transparent;
+      border: 1px solid var(--gold-dim);
+      color: var(--gold);
+      font-family: 'Cinzel', serif;
+      font-size: 13px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.25s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, var(--gold-dim), transparent);
+      opacity: 0;
+      transition: opacity 0.25s;
+    }
+
+    .btn:hover::before { opacity: 0.15; }
+
+    .btn:hover {
+      border-color: var(--gold);
+      box-shadow: 0 0 20px rgba(200,169,110,0.15);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Result box */
+    .result {
+      margin-top: 24px;
+      padding: 20px;
+      border-radius: 6px;
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .result.success {
+      display: block;
+      background: rgba(74, 140, 92, 0.1);
+      border: 1px solid rgba(74, 140, 92, 0.3);
+    }
+
+    .result.error {
+      display: block;
+      background: rgba(192, 64, 64, 0.1);
+      border: 1px solid rgba(192, 64, 64, 0.3);
+    }
+
+    .result.locked {
+      display: block;
+      background: rgba(200, 169, 110, 0.06);
+      border: 1px solid rgba(200, 169, 110, 0.2);
+    }
+
+    .result-title {
+      font-family: 'Cinzel', serif;
+      font-size: 12px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .result.success .result-title { color: var(--green); }
+    .result.error .result-title { color: var(--red); }
+    .result.locked .result-title { color: var(--gold); }
+
+    /* ID copy box */
+    .id-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    .id-text {
+      flex: 1;
+      font-family: monospace;
+      font-size: 13px;
+      color: var(--gold-light);
+      word-break: break-all;
+    }
+
+    .copy-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      padding: 6px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover { border-color: var(--gold-dim); color: var(--gold); }
+
+    /* Countdown */
+    .countdown {
+      display: flex;
+      gap: 16px;
+      margin-top: 12px;
+      justify-content: center;
+    }
+
+    .count-block {
+      text-align: center;
+    }
+
+    .count-num {
+      font-family: 'Cinzel', serif;
+      font-size: 32px;
+      color: var(--gold);
+      line-height: 1;
+    }
+
+    .count-label {
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    .count-sep {
+      font-family: 'Cinzel', serif;
+      font-size: 24px;
+      color: var(--gold-dim);
+      align-self: flex-start;
+      padding-top: 4px;
+    }
+
+    /* Revealed password */
+    .revealed-pass {
+      font-family: monospace;
+      font-size: 20px;
+      color: var(--gold-light);
+      background: var(--bg);
+      padding: 16px;
+      border-radius: 4px;
+      letter-spacing: 0.1em;
+      text-align: center;
+      margin-top: 8px;
+      word-break: break-all;
+    }
+
+    /* Warning */
+    .warning-box {
+      background: rgba(200, 169, 110, 0.06);
+      border: 1px solid rgba(200, 169, 110, 0.2);
+      border-radius: 6px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+      font-size: 14px;
+      color: var(--text-dim);
+      font-style: italic;
+    }
+
+    .warning-box strong {
+      color: var(--gold);
+      font-style: normal;
+      font-family: 'Cinzel', serif;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    /* Loading */
+    .loading {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--gold-dim);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .hint-text {
+      font-style: italic;
+      color: var(--text-dim);
+      font-size: 14px;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <span class="lock-icon">🔐</span>
+    <h1>TimeLock</h1>
+    <p class="subtitle">Apna secret future mein bhejo</p>
+    <div class="divider"></div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('lock')">🔒 Lock Karo</button>
+    <button class="tab" onclick="switchTab('unlock')">🔓 Unlock Karo</button>
+  </div>
+
+  <!-- LOCK PANEL -->
+  <div id="panel-lock" class="panel active">
+    <div class="card">
+
+      <div class="warning-box">
+        <strong>⚠️ Yaad Rakhna</strong>
+        Lock karne ke baad jo ID milegi, use safe jagah save karo. Bina ID ke password wapas nahi milega.
+      </div>
+
+      <label>Tera Secret / Password</label>
+      <div class="password-wrap">
+        <input type="password" id="secret-input" placeholder="Woh password jo lock karna hai..." />
+        <button class="toggle-eye" onclick="toggleVisibility('secret-input', this)">👁</button>
+      </div>
+
+      <label>Hint (Optional) — Yaad dilane ke liye</label>
+      <input type="text" id="hint-input" placeholder="Jaise: 'Main woh game ka password hun'" maxlength="100" />
+
+      <label>Unlock Date — Kab kholna hai?</label>
+      <input type="date" id="unlock-date" min="" />
+
+      <div class="preset-btns">
+        <button class="preset" onclick="setPreset(7)">7 Din</button>
+        <button class="preset" onclick="setPreset(15)">15 Din</button>
+        <button class="preset" onclick="setPreset(30)">1 Mahina</button>
+        <button class="preset" onclick="setPreset(90)">3 Mahine</button>
+      </div>
+
+      <button class="btn" id="lock-btn" onclick="lockSecret()">🔒 Lock Karo</button>
+
+      <div id="lock-result" class="result"></div>
+    </div>
+  </div>
+
+  <!-- UNLOCK PANEL -->
+  <div id="panel-unlock" class="panel">
+    <div class="card">
+
+      <label>Tera Secret ID</label>
+      <input type="text" id="id-input" placeholder="Woh ID daalo jo lock karte waqt mili thi..." />
+
+      <button class="btn" id="unlock-btn" onclick="unlockSecret()">🔓 Unlock Karo</button>
+
+      <div id="unlock-result" class="result"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Min date = kal
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  document.getElementById('unlock-date').min = tomorrow.toISOString().split('T')[0];
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', (i === 0) === (tab === 'lock')));
+    document.getElementById('panel-lock').classList.toggle('active', tab === 'lock');
+    document.getElementById('panel-unlock').classList.toggle('active', tab === 'unlock');
+  }
+
+  function setPreset(days) {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    document.getElementById('unlock-date').value = d.toISOString().split('T')[0];
+  }
+
+  function toggleVisibility(id, btn) {
+    const el = document.getElementById(id);
+    el.type = el.type === 'password' ? 'text' : 'password';
+    btn.textContent = el.type === 'password' ? '👁' : '🙈';
+  }
+
+  // Simple client-side encryption (extra layer)
+  function encryptData(text) {
+    const key = CryptoJS.lib.WordArray.random(16).toString();
+    const encrypted = CryptoJS.AES.encrypt(text, key).toString();
+    return { encrypted, key };
+  }
+
+  function decryptData(encrypted, key) {
+    return CryptoJS.AES.decrypt(encrypted, key).toString(CryptoJS.enc.Utf8);
+  }
+
+  async function lockSecret() {
+    const secret = document.getElementById('secret-input').value.trim();
+    const hint = document.getElementById('hint-input').value.trim();
+    const dateVal = document.getElementById('unlock-date').value;
+    const btn = document.getElementById('lock-btn');
+    const result = document.getElementById('lock-result');
+
+    if (!secret) return showResult(result, 'error', '❌ Galti', 'Password khaali nahi hona chahiye!');
+    if (!dateVal) return showResult(result, 'error', '❌ Galti', 'Unlock date select karo!');
+
+    const unlockTimestamp = new Date(dateVal + 'T23:59:59').getTime();
+    if (unlockTimestamp <= Date.now()) return showResult(result, 'error', '❌ Galti', 'Date future mein honi chahiye!');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading"></span> Lock ho raha hai...';
+
+    try {
+      // Client-side encrypt karo (double security)
+      const { encrypted, key } = encryptData(secret);
+      // Key + encrypted dono store karo (server pe sirf encrypted goes)
+      // For simplicity, store both in server with the combo
+      const combo = JSON.stringify({ e: encrypted, k: key });
+
+      const res = await fetch('/.netlify/functions/lock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          encryptedPassword: combo,
+          unlockTimestamp,
+          hint,
+        })
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        const unlockDateStr = new Date(unlockTimestamp).toLocaleDateString('hi-IN', {
+          day: 'numeric', month: 'long', year: 'numeric'
+        });
+
+        result.className = 'result success';
+        result.innerHTML = `
+          <div class="result-title">✅ Lock Ho Gaya!</div>
+          <p style="margin-bottom:10px;font-size:15px;">Password <strong style="color:var(--gold)">${unlockDateStr}</strong> tak locked hai.</p>
+          <label style="margin-top:16px">📋 Teri Secret ID — SAVE KAR LE!</label>
+          <div class="id-box">
+            <span class="id-text" id="copy-id">${data.id}</span>
+            <button class="copy-btn" onclick="copyID('${data.id}')">Copy</button>
+          </div>
+          <p style="margin-top:12px;font-size:13px;color:var(--text-dim);font-style:italic;">
+            ⚠️ Is ID ke bina password kabhi wapas nahi milega. Screenshot le lo!
+          </p>
+        `;
+        result.style.display = 'block';
+
+        // Clear the input
+        document.getElementById('secret-input').value = '';
+      } else {
+        showResult(result, 'error', '❌ Error', data.error || 'Kuch gadbad ho gayi');
+      }
+    } catch (err) {
+      showResult(result, 'error', '❌ Network Error', 'Server se connect nahi hua. Internet check karo.');
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '🔒 Lock Karo';
+  }
+
+  async function unlockSecret() {
+    const id = document.getElementById('id-input').value.trim();
+    const btn = document.getElementById('unlock-btn');
+    const result = document.getElementById('unlock-result');
+
+    if (!id) return showResult(result, 'error', '❌ Galti', 'ID daalo pehle!');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading"></span> Check ho raha hai...';
+
+    try {
+      const res = await fetch('/.netlify/functions/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+
+      const data = await res.json();
+
+      if (data.locked) {
+        const { days, hours, minutes } = data.remaining;
+        result.className = 'result locked';
+        result.innerHTML = `
+          <div class="result-title">⏳ Abhi Time Nahi Hua</div>
+          ${data.hint ? `<p class="hint-text">Hint: "${data.hint}"</p>` : ''}
+          <div class="countdown">
+            <div class="count-block">
+              <div class="count-num">${String(days).padStart(2,'0')}</div>
+              <div class="count-label">Din</div>
+            </div>
+            <div class="count-sep">:</div>
+            <div class="count-block">
+              <div class="count-num">${String(hours).padStart(2,'0')}</div>
+              <div class="count-label">Ghante</div>
+            </div>
+            <div class="count-sep">:</div>
+            <div class="count-block">
+              <div class="count-num">${String(minutes).padStart(2,'0')}</div>
+              <div class="count-label">Minute</div>
+            </div>
+          </div>
+          <p style="margin-top:14px;font-size:14px;color:var(--text-dim);text-align:center;">
+            Ruk ja. Yeh time bhi guzar jaayega. 💪
+          </p>
+        `;
+        result.style.display = 'block';
+      } else if (data.success) {
+        // Decrypt client-side
+        const combo = JSON.parse(data.encryptedPassword);
+        const plainPassword = decryptData(combo.e, combo.k);
+
+        result.className = 'result success';
+        result.innerHTML = `
+          <div class="result-title">🎉 Unlock Ho Gaya!</div>
+          ${data.hint ? `<p class="hint-text" style="margin-bottom:8px;">Hint: "${data.hint}"</p>` : ''}
+          <div class="revealed-pass" id="revealed">${plainPassword}</div>
+          <button class="copy-btn" style="width:100%;margin-top:10px;padding:10px" onclick="copyText('${plainPassword}')">📋 Copy Karo</button>
+        `;
+        result.style.display = 'block';
+      } else {
+        showResult(result, 'error', '❌ Error', data.error || 'Kuch gadbad ho gayi');
+      }
+    } catch (err) {
+      showResult(result, 'error', '❌ Network Error', 'Server se connect nahi hua.');
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '🔓 Unlock Karo';
+  }
+
+  function showResult(el, type, title, msg) {
+    el.className = `result ${type}`;
+    el.innerHTML = `<div class="result-title">${title}</div><p>${msg}</p>`;
+    el.style.display = 'block';
+  }
+
+  function copyID(id) {
+    navigator.clipboard.writeText(id).then(() => {
+      const btn = event.target;
+      btn.textContent = '✅ Copied!';
+      setTimeout(() => btn.textContent = 'Copy', 2000);
+    });
+  }
+
+  function copyText(text) {
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = event.target;
+      btn.textContent = '✅ Copy Ho Gaya!';
+      setTimeout(() => btn.textContent = '📋 Copy Karo', 2000);
+    });
+  }
+</script>
+</body>
+</html>

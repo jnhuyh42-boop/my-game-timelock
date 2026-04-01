@@ -1,0 +1,15 @@
+{
+  "name": "timelock-app",
+  "version": "1.0.0",
+  "description": "Self-hosted timelock encryption app",
+  "scripts": {
+    "dev": "netlify dev"
+  },
+  "dependencies": {
+    "@netlify/functions": "^2.0.0",
+    "crypto-js": "^4.2.0"
+  },
+  "devDependencies": {
+    "netlify-cli": "^17.0.0"
+  }
+}
