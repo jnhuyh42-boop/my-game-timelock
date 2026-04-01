@@ -1,93 +1,35 @@
-// netlify/functions/lock.js
-// Password ko time-lock ke saath store karta hai
-// Security = server-side time check (bypass impossible)
+import { getStore } from "@netlify/blobs";
 
-const { getStore } = require("@netlify/blobs");
-const crypto = require("crypto");
-
-exports.handler = async (event) => {
-  const headers = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Content-Type": "application/json",
-  };
-
-  if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 200, headers, body: "" };
-  }
-
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, headers, body: JSON.stringify({ error: "Method not allowed" }) };
-  }
+export default async (req) => {
+  // CORS Bypass
+  if (req.method === "OPTIONS") return new Response("OK", { status: 200, headers: { "Access-Control-Allow-Origin": "*" } });
+  if (req.method !== "POST") return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405 });
 
   try {
-    const body = JSON.parse(event.body);
-    const { password, unlockTimestamp, hint } = body;
+    const body = await req.json();
+    const { encryptedPassword, unlockTimestamp, hint } = body;
 
-    // Validation
-    if (!password || typeof password !== "string" || password.trim() === "") {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: "Password khaali nahi hona chahiye" }),
-      };
+    if (!encryptedPassword || !unlockTimestamp) {
+      return new Response(JSON.stringify({ error: "Missing data" }), { status: 400 });
     }
 
-    if (!unlockTimestamp || typeof unlockTimestamp !== "number") {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: "unlockTimestamp required hai" }),
-      };
-    }
+    // Unique Random ID generate karna
+    const id = Date.now().toString(36) + Math.random().toString(36).substring(2, 10);
 
-    // Future mein hona chahiye
-    if (unlockTimestamp <= Date.now()) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: "Unlock time future mein hona chahiye" }),
-      };
-    }
-
-    // Max 2 saal tak lock kar sakte ho
-    const twoYears = Date.now() + (2 * 365 * 24 * 60 * 60 * 1000);
-    if (unlockTimestamp > twoYears) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: "Maximum 2 saal tak lock kar sakte ho" }),
-      };
-    }
-
-    // Unique ID generate karo (32 char hex)
-    const id = crypto.randomBytes(16).toString("hex");
-
-    // Netlify Blobs mein save karo
+    // Database mein secure karna
     const store = getStore("timelock-secrets");
     await store.setJSON(id, {
-      password: password.trim(),       // plaintext — server hi security hai
+      encryptedPassword,
       unlockTimestamp,
-      hint: hint ? hint.trim().slice(0, 150) : "",
+      hint: hint || "",
       createdAt: Date.now(),
     });
 
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        success: true,
-        id,
-        unlockDate: new Date(unlockTimestamp).toISOString(),
-      }),
-    };
-
+    return new Response(JSON.stringify({ success: true, id }), { 
+      status: 200, 
+      headers: { "Content-Type": "application/json" } 
+    });
   } catch (err) {
-    console.error("Lock error:", err);
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: "Server error. Dobara try karo." }),
-    };
+    return new Response(JSON.stringify({ error: "Server error: " + err.message }), { status: 500 });
   }
 };
