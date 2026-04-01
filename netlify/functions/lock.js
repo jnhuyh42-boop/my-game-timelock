@@ -1,10 +1,10 @@
 // netlify/functions/lock.js
-// Stores encrypted password with unlock time in Netlify Blobs (persistent storage)
-
-const { getStore } = require("@netlify/blobs");
+const { getStore, connectLambda } = require("@netlify/blobs");
 const crypto = require("crypto");
 
 exports.handler = async (event) => {
+  connectLambda(event); // Ye ek line add ki hai Database connect karne ke liye
+  
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
@@ -30,10 +30,8 @@ exports.handler = async (event) => {
       };
     }
 
-    // Unique ID generate karo
     const id = crypto.randomBytes(16).toString("hex");
 
-    // Netlify Blobs mein store karo (persistent!)
     const store = getStore("timelock-secrets");
     await store.setJSON(id, {
       encryptedPassword,
