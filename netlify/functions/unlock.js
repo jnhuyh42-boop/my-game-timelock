@@ -1,9 +1,9 @@
 // netlify/functions/unlock.js
-// Time check server-side — client kuch bhi kare, bypass nahi hoga
-
-const { getStore } = require("@netlify/blobs");
+const { getStore, connectLambda } = require("@netlify/blobs");
 
 exports.handler = async (event) => {
+  connectLambda(event); // Ye ek line yahan bhi add ki hai
+
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
@@ -43,7 +43,6 @@ exports.handler = async (event) => {
     const now = Date.now();
     const unlockTime = data.unlockTimestamp;
 
-    // SERVER-SIDE TIME CHECK — bypass impossible
     if (now < unlockTime) {
       const remaining = unlockTime - now;
       const days = Math.floor(remaining / (1000 * 60 * 60 * 24));
@@ -63,7 +62,6 @@ exports.handler = async (event) => {
       };
     }
 
-    // Time ho gaya — return karo
     return {
       statusCode: 200,
       headers,
